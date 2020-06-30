@@ -36,20 +36,30 @@ def modhm_fd(**kwargs):
     kwargs["approximant"] = apprx
     # add default values, check for other required values
     kwargs = props(None, **kwargs)
-    # pull out the fractional arguments
-    modargs = [p for p in kwargs if p.startswith("fdiff_")]
+    # pull out the modification arguments
+    modargs = [p for p in kwargs
+               if p.startswith("fdiff_") or p.startswith("absdiff_")]
     modargs = dict((p, kwargs.pop(p)) for p in modargs)
     # parse the parameters
     modparams = {}
     for p, val in modargs.items():
         # template is fdiff_mode_param
-        _, mode, param = p.split('_', 2)
+        diffarg, mode, param = p.split('_', 2)
         mode = tuple(int(x) for x in mode)
         try:
             addto = modparams[mode]
         except KeyError:
             addto = modparams[mode] = {}
-        addto[param] = val
+        isabsdiff = diffarg.startswith("abs")
+        if param in addto:
+            # the parameter is already there; means both diff and fdiff were
+            # specified
+            raise ValueError("Both a fractional difference (starts with "
+                             "'fdiff_') and an absolute difference (starts "
+                             "with 'absdiff_') specified for parameter {} and "
+                             "mode {}. Please only provide one or the other."
+                             .format(param, ''.join(map(str, mode))))
+        addto[param] = (val, isabsdiff)
     # cycle over the modes, generating the waveform one at a time
     hps = []
     hcs = []
@@ -60,16 +70,22 @@ def modhm_fd(**kwargs):
         mode = tuple(mode)
         if mode in modparams:
             # convert mchirp, eta to mass1, mass2 if they are provided
-            mchirp_fdiff = modparams[mode].pop('mchirp', 0.)
-            eta_fdiff = modparams[mode].pop('eta', 0.)
-            if mchirp_fdiff or eta_fdiff:
+            mchirp_diff, mcisabs = modparams[mode].pop('mchirp', (0, True))
+            eta_diff, etaisabs = modparams[mode].pop('eta', (0, True))
+            if mchirp_diff or eta_diff:
                 m1 = kwargs['mass1']
                 m2 = kwargs['mass2']
                 mchirp = conversions.mchirp_from_mass1_mass2(m1, m2)
                 eta = conversions.eta_from_mass1_mass2(m1, m2)
                 # scale
-                mchirp *= 1 + mchirp_fdiff
-                eta *= 1 + eta_fdiff
+                if mcisabs:
+                    mchirp += mchirp_diff
+                else:
+                    mchirp *= 1 + mchirp_diff
+                if etaisabs:
+                    eta += eta_diff
+                else:
+                    eta *= 1 + eta_diff
                 # make sure values are physical
                 eta = max(min(eta, 0.25), 0)
                 m1 = conversions.mass1_from_mchirp_eta(mchirp, eta)
@@ -78,8 +94,12 @@ def modhm_fd(**kwargs):
                 wfargs['mass2'] = m2
             # update all other parameters
             for p in list(modparams[mode].keys()):
-                fdiff = modparams[mode].pop(p)
-                wfargs[p] = kwargs[p] * (1 + fdiff)
+                diff, isabsdiff = modparams[mode].pop(p)
+                if isabsdiff:
+                    modp = kwargs[p] + diff
+                else:
+                    modp = kwargs[p] * (1 + diff)
+                wfargs[p] = modp
         wfargs['mode_array'] = [mode]
         hp, hc = get_fd_waveform(**wfargs) 
         hps.append(hp)
