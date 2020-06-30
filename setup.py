@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-setup.py file for test GR with multimode waveforms plugin package
+setup.py file for modified higher mode waveforms plugin package
 """
 
 from setuptools import Extension, setup, Command
@@ -12,7 +12,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='testgr_multimode_waveforms',
+    name='modified_hm_waveforms',
     version=VERSION,
     description='Waveform hook that allows different parameters to be used '
                 'for different modes.',
