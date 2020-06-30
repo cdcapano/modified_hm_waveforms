@@ -23,7 +23,7 @@ setup(
     install_requires=['pycbc', 'lalsuite'],
     py_modules=['modhm'],
     entry_points={
-        "pycbc.waveform.fd" : " = modhm:modhm_fd"},
+        "pycbc.waveform.fd" : "modhm = modhm:modhm_fd"},
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 2.7',
