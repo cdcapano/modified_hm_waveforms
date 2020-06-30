@@ -15,6 +15,8 @@
 
 from __future__ import (absolute_import, division)
 
+import shlex
+import numpy
 from pycbc import conversions
 from pycbc.waveform.waveform import (get_fd_waveform, props)
 
@@ -63,6 +65,10 @@ def modhm_fd(**kwargs):
         mode_array = kwargs.pop("mode_array")
     except KeyError:
         raise ValueError("Must provide a mode_array")
+    # ensure mode array is a list of modes
+    if isinstance(mode_array, str):
+        mode_array = [tuple(int(m) for m in mode)
+                      for mode in shlex.split(mode_array)]
     # set the approximant to the base
     kwargs["approximant"] = apprx
     # add default values, check for other required values
