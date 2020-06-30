@@ -20,8 +20,39 @@ from pycbc.waveform.waveform import (get_fd_waveform, props)
 
 
 def modhm_fd(**kwargs):
-    """Allows a waveform to be generated with different parameters for the
+    r"""Allows a waveform to be generated with different parameters for the
     sub-dominant modes.
+
+    Parameters
+    ----------
+    base_approximant : str
+        The waveform approximant to use.
+    mode_array : array of tuples
+        The modes to generate, e.g., ``[(2, 2), (3, 3)]``.
+    fdiff_{mode}_{parameter} : float, optional
+        Adjust the parameter ``{parameter}`` for mode ``{mode}`` by the
+        given fractional difference. The ``{parameter}`` must be one of the
+        other keyword arguments provide, or ``mchirp`` or ``eta``. If the
+        later, the ``mass1`` and ``mass2`` values will be modified accordingly.
+        For example, ``fdiff_33_mchirp = -0.1`` will make the chirp mass used
+        to generate the 33 mode be 10% smaller than the mchirp specified
+        by the given ``mass1`` and ``mass2`` parameters (and used for all
+        other modes aside from the 33 mode).
+    absdiff_{mode}_{parameter} : float, optional
+        Same as ``fdiff_{mode}_{parameter}``, but apply an absolute difference
+        to the parameter. For example, ``absdiff_33_coa_phase = 2`` would
+        shift the ``coa_phase`` passed to the 33 mode by 2 radians with
+        respect to the ``coa_phase`` passed to all other modes.
+    other kwargs :
+        All other keyword argument are passed to
+        :py:func:`pycbc.waveform.waveform.get_fd_waveform`.
+
+    Returns
+    -------
+    hp : FrequencySeries
+        The plus polarization.
+    hc : FrequencySeries
+        The cross polarization.
     """
     # pull out the base wavefrom
     try:
