@@ -21,9 +21,9 @@ setup(
     author_email='cdcapano@gmail.com',
     keywords=['pycbc', 'signal processing', 'gravitational waves'],
     install_requires=['pycbc', 'lalsuite'],
-    py_modules=['multimode_testgr'],
+    py_modules=['modhm'],
     entry_points={
-        "pycbc.waveform.fd" : " = multimode_testgr:multimode_testgr_fd"},
+        "pycbc.waveform.fd" : " = modhm:modhm_fd"},
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 2.7',
