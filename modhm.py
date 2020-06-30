@@ -16,7 +16,7 @@
 from __future__ import (absolute_import, division)
 
 from pycbc import conversions
-from pycbc.waveform import (get_fd_waveform, props)
+from pycbc.waveform.waveform import (get_fd_waveform, props)
 
 
 def modhm_fd(**kwargs):
@@ -35,10 +35,10 @@ def modhm_fd(**kwargs):
     # set the approximant to the base
     kwargs["approximant"] = apprx
     # add default values, check for other required values
-    kwargs = props(**kwargs) 
+    kwargs = props(None, **kwargs)
     # pull out the fractional arguments
     modargs = [p for p in kwargs if p.startswith("fdiff_")]
-    modargs = dict(kwargs.pop(p) for p in modargs)
+    modargs = dict((p, kwargs.pop(p)) for p in modargs)
     # parse the parameters
     modparams = {}
     for p, val in modargs.items():
@@ -54,6 +54,7 @@ def modhm_fd(**kwargs):
     hps = []
     hcs = []
     wfargs = kwargs.copy()
+    size = 0
     for mode in mode_array:
         # make sure mode is a tuple
         mode = tuple(mode)
@@ -83,4 +84,9 @@ def modhm_fd(**kwargs):
         hp, hc = get_fd_waveform(**wfargs) 
         hps.append(hp)
         hcs.append(hc)
+        size = max(size, len(hp))
+    # make sure everything is the same size
+    for ii, hp in enumerate(hps):
+        hp.resize(size)
+        hcs[ii].resize(size)
     return sum(hps), sum(hcs)
