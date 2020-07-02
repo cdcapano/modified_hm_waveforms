@@ -25,26 +25,42 @@ def modhm_fd(**kwargs):
     r"""Allows a waveform to be generated with different parameters for the
     sub-dominant modes.
 
+    Modified parameters may be specified in one of two ways. For parameter
+    ``{parameter}`` and mode ``{mode}`` you can either provide
+    ``mod_{mode}_{parameter}`` or ``fdiff_{mode}_{parameter}``. If the former,
+    the given value will be used for the parameter for the given mode. If the
+    latter, the parameter will be scaled by 1 + the given value for the
+    specified mode.
+
+    Special combinations of parameters are recognized. They are:
+
+    * ``mchirp``, ``eta`` : if either of these are modified, then ``mass1``
+      and ``mass2`` wil be adjusted accordingly. If the resulting ``eta``
+      is unphysical (not in [0, 0.25]) or chirp mass (not > 0) is unphysical,
+      a ``NoWaveformError`` is raised.
+    * ``chi_eff``, ``chi_a``: if either of these are modified, then ``spin1z``
+      and ``spin2z`` will be adjusted accordingly, using the modified ``mass1``
+      and ``mass2``.
+    * ``spin1_perp``, ``spin1_azimuthal`` : if either of these are modified,
+      then ``spin1x`` and ``spin1y`` will be adjusted accordingly.
+    * ``spin2_perp``, ``spin2_azimuthal``: same as above, but for the second
+      object.
+
+    If the resulting modified spins yield a magnitude > 1, a ``NoWaveformError``
+    is raised.
+      
+
     Parameters
     ----------
     base_approximant : str
         The waveform approximant to use.
     mode_array : array of tuples
         The modes to generate, e.g., ``[(2, 2), (3, 3)]``.
+    mod_{mode}_{parameter} : float, optional
+        Use the given value for ``{parameter}`` for mode ``{mode}``.
     fdiff_{mode}_{parameter} : float, optional
         Adjust the parameter ``{parameter}`` for mode ``{mode}`` by the
-        given fractional difference. The ``{parameter}`` must be one of the
-        other keyword arguments provide, or ``mchirp`` or ``eta``. If the
-        later, the ``mass1`` and ``mass2`` values will be modified accordingly.
-        For example, ``fdiff_33_mchirp = -0.1`` will make the chirp mass used
-        to generate the 33 mode be 10% smaller than the mchirp specified
-        by the given ``mass1`` and ``mass2`` parameters (and used for all
-        other modes aside from the 33 mode).
-    absdiff_{mode}_{parameter} : float, optional
-        Same as ``fdiff_{mode}_{parameter}``, but apply an absolute difference
-        to the parameter. For example, ``absdiff_33_coa_phase = 2`` would
-        shift the ``coa_phase`` passed to the 33 mode by 2 radians with
-        respect to the ``coa_phase`` passed to all other modes.
+        given fractional difference.
     other kwargs :
         All other keyword argument are passed to
         :py:func:`pycbc.waveform.waveform.get_fd_waveform`.
@@ -75,28 +91,25 @@ def modhm_fd(**kwargs):
     kwargs = props(None, **kwargs)
     # pull out the modification arguments
     modargs = [p for p in kwargs
-               if p.startswith("fdiff_") or p.startswith("absdiff_")]
+               if p.startswith("fdiff_") or p.startswith("absdiff_")
+               or p.startswith("replace_")]
     modargs = dict((p, kwargs.pop(p)) for p in modargs)
     # parse the parameters
     modparams = {}
     for p, val in modargs.items():
-        # template is fdiff_mode_param
+        # template is (fdiff|mod)_mode_param
         diffarg, mode, param = p.split('_', 2)
         mode = tuple(int(x) for x in mode)
         try:
             addto = modparams[mode]
         except KeyError:
             addto = modparams[mode] = {}
-        isabsdiff = diffarg.startswith("abs")
         if param in addto:
-            # the parameter is already there; means both diff and fdiff were
-            # specified
-            raise ValueError("Both a fractional difference (starts with "
-                             "'fdiff_') and an absolute difference (starts "
-                             "with 'absdiff_') specified for parameter {} and "
-                             "mode {}. Please only provide one or the other."
-                             .format(param, ''.join(map(str, mode))))
-        addto[param] = (val, isabsdiff)
+            # the parameter is already there; means multiple args were given
+            raise ValueError("Provide only one of absdiff_{m}_{p}, "
+                             "fdiff_{m}_{p}, or replace_{m}_{p}".format(
+                             m=''.join(mode), param))
+        addto[param] = (val, diffarg)
     # cycle over the modes, generating the waveform one at a time
     hps = []
     hcs = []
@@ -107,32 +120,26 @@ def modhm_fd(**kwargs):
         mode = tuple(mode)
         if mode in modparams:
             # convert mchirp, eta to mass1, mass2 if they are provided
-            mchirp_diff, mcisabs = modparams[mode].pop('mchirp', (0, True))
-            eta_diff, etaisabs = modparams[mode].pop('eta', (0, True))
-            if mchirp_diff or eta_diff:
+            mchirp_mod = modparams[mode].pop('mchirp', None)
+            eta_mod = modparams[mode].pop('eta', None)
+            if mchirp_mod is not None or eta_mod is not None:
                 m1, m2 = transform_masses(kwargs['mass1'], kwargs['mass2'],
-                                          (mchirp_diff, mcisabs),
-                                          (eta_diff, etaisabs))
+                                          mchirp_mod, eta_mod
                 wfargs['mass1'] = m1
                 wfargs['mass2'] = m2
             # convert spins
-            chieff_diff, ceisabs = modparams[mode].pop('chi_eff', (0, True))
-            chia_diff, caisabs = modparams[mode].pop('chi_a', (0, True))
-            if chieff_diff or chia_diff:
+            chieff_mod = modparams[mode].pop('chi_eff', None)
+            chia_mod = modparams[mode].pop('chi_a', None)
+            if chieff_mod is not None or chia_mod is not None:
                 s1z, s2z = transform_spinzs(wfargs['mass1'], wfargs['mass2'],
                                             kwargs['spin1z'], kwargs['spin2z'],
-                                            (chieff_diff, ceisabs),
-                                            (chia_diff, caisabs))
+                                            chieff_mod, chia_mod)
                 wfargs['spin1z'] = s1z
                 wfargs['spin2z'] = s2z
             # update all other parameters
             for p in list(modparams[mode].keys()):
-                diff, isabsdiff = modparams[mode].pop(p)
-                if isabsdiff:
-                    modp = kwargs[p] + diff
-                else:
-                    modp = kwargs[p] * (1 + diff)
-                wfargs[p] = modp
+                diff, modtype = modparams[mode].pop(p)
+                wfargs[p] = apply_mod(kwargs[p], diff, modtype)
         wfargs['mode_array'] = [mode]
         hp, hc = get_fd_waveform(**wfargs) 
         hps.append(hp)
@@ -145,20 +152,66 @@ def modhm_fd(**kwargs):
     return sum(hps), sum(hcs)
 
 
-def transform_masses(m1, m2, mchirp_diff, eta_diff):
-    mchirp_diff, mcisabs = mchirp_diff
-    eta_diff, etaisabs = eta_diff
-    mchirp = conversions.mchirp_from_mass1_mass2(m1, m2)
-    eta = conversions.eta_from_mass1_mass2(m1, m2)
-    # scale
-    if mcisabs:
-        mchirp += mchirp_diff
+def apply_mod(origval, diff, modtype):
+    """Applies modification to a parameter value.i
+    
+    Parameters
+    ----------
+    origval : float
+        The original parameter value.
+    diff : float
+        The modification value.
+    modtype : {'fdiff', 'absdiff', 'replace'}
+        How to modify the original value.
+
+    Returns
+    -------
+    float :
+        The modified parameter value.
+    """
+    if modtype == 'fdiff':
+        newval = origval * (1 + diff)
+    elif modtype == 'absdiff':
+        newval = origval + diff
+    elif modtype == 'replace':
+        newval = diff
     else:
-        mchirp *= 1 + mchirp_diff
-    if etaisabs:
-        eta += eta_diff
-    else:
-        eta *= 1 + eta_diff
+        raise ValueError("unrecognized modtype {}".format(modtype))
+    return newval
+
+
+def transform_masses(mass1, mass2, mchirp_mod, eta_mod):
+    """Modifies masses given a difference in mchirp and eta.
+
+    Parameters
+    ----------
+    mass1 : float
+        Mass of the larger object (already modified).
+    mass2 : float
+        Mass of the smaller object (already modified).
+    mchirp_mod : tuple of (float, str) or None
+        Tuple giving the modification value for ``mchirp``, and a string
+        indicating whether the given modification is a fractional difference
+        (``'fdiff'``), an absolute difference (``'absdiff'``), or a replacement
+        (``'replace'``). If ``None``, the chirp mass will not be modified.
+    eta_mod : tuple of (float, str)
+        Same as ``mchirp_mod``, but for ``eta``.
+
+    Returns
+    -------
+    mass1 : float
+        Modified mass1.
+    mass2 : float
+        Modified mass2.
+    """
+    mchirp = conversions.mchirp_from_mass1_mass2(mass1, mass2)
+    eta = conversions.eta_from_mass1_mass2(mass1, mass2
+    if mchirp_mod is not None:
+        diff, modtype = mchirp_mod
+        mchirp = apply_mod(mchirp, diff, modtype)
+    if eta_mod is not None:
+        diff, modtype = eta_mod
+        eta = apply_mod(eta, diff, modtype)
     # make sure values are physical
     if (eta < 0 or eta > 0.25) or mchirp < 0:
         raise NoWaveformError("unphysical masses")
@@ -167,7 +220,7 @@ def transform_masses(m1, m2, mchirp_diff, eta_diff):
     return m1, m2
 
 
-def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_diff, chia_diff):
+def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_mod, chia_mod):
     """Modifies spinzs given a difference in chieff and chia.
 
     Parameters
@@ -180,30 +233,29 @@ def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_diff, chia_diff):
         Z-component of spin of object 1 to modify.
     spin2z : float
         Z-component of spin of object 2 to modify.
-    chieff_diff : tuple of float, bool
-        Tuple giving the difference on ``chi_eff``, and a boolean indicating
-        whether the difference is an absolute difference (True), or a
-        fractional difference (False).
+    chieff_mod : tuple of (float, str) or None
+        Tuple giving the modification value for ``chi_eff``, and a string
+        indicating whether the given modification is a fractional difference
+        (``'fdiff'``), an absolute difference (``'absdiff'``), or a replacement
+        (``'replace'``). If ``None``, ``chi_eff`` will not be modified.
+    chia_mod : tuple of (float, str) or None
+        Same as ``chieff_mod``, but for ``chi_a``.
 
     Returns
     -------
-    spin1z_mod : float
+    spin1z : float
         Modified spin1z
-    spin2z_mod : float
+    spin2z : float
         Modified spin2z
     """
-    chieff_diff, ceisabs = chieff_diff
-    chia_diff, caisabs = chia_diff
     chi_eff = conversions.chi_eff(mass1, mass2, spin1z, spin2z)
     chi_a = conversions.chi_a(mass1, mass2, spin1z, spin2z)
-    if ceisabs:
-        chi_eff += chieff_diff
-    else:
-        chi_eff *= 1 + chieff_diff
-    if caisabs:
-        chi_a += chia_diff
-    else:
-        chi_a *= 1 + chia_diff
+    if chieff_mod is not None:
+        diff, modtype = chieff_mod
+        chi_eff = apply_mod(chi_eff, diff, modtype)
+    if chia_mod is not None:
+        diff, modtype = chia_mod
+        chi_a = apply_mod(chi_a, diff, modtype)
     spin1z = conversions.spin1z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
                                                                chi_eff, chi_a)
     spin2z = conversions.spin2z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
