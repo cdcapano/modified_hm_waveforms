@@ -18,7 +18,7 @@ from __future__ import (absolute_import, division)
 import shlex
 import numpy
 from pycbc import conversions
-from pycbc.waveform.waveform import (get_fd_waveform, props)
+from pycbc.waveform.waveform import (get_fd_waveform, props, NoWaveformError)
 
 
 def modhm_fd(**kwargs):
@@ -110,25 +110,21 @@ def modhm_fd(**kwargs):
             mchirp_diff, mcisabs = modparams[mode].pop('mchirp', (0, True))
             eta_diff, etaisabs = modparams[mode].pop('eta', (0, True))
             if mchirp_diff or eta_diff:
-                m1 = kwargs['mass1']
-                m2 = kwargs['mass2']
-                mchirp = conversions.mchirp_from_mass1_mass2(m1, m2)
-                eta = conversions.eta_from_mass1_mass2(m1, m2)
-                # scale
-                if mcisabs:
-                    mchirp += mchirp_diff
-                else:
-                    mchirp *= 1 + mchirp_diff
-                if etaisabs:
-                    eta += eta_diff
-                else:
-                    eta *= 1 + eta_diff
-                # make sure values are physical
-                eta = max(min(eta, 0.25), 0)
-                m1 = conversions.mass1_from_mchirp_eta(mchirp, eta)
-                m2 = conversions.mass2_from_mchirp_eta(mchirp, eta)
+                m1, m2 = transform_masses(kwargs['mass1'], kwargs['mass2'],
+                                          (mchirp_diff, mcisabs),
+                                          (eta_diff, etaisabs))
                 wfargs['mass1'] = m1
                 wfargs['mass2'] = m2
+            # convert spins
+            chieff_diff, ceisabs = modparams[mode].pop('chi_eff', (0, True))
+            chia_diff, caisabs = modparams[mode].pop('chi_a', (0, True))
+            if chieff_diff or chia_diff:
+                s1z, s2z = transform_spinzs(wfargs['mass1'], wfargs['mass2'],
+                                            kwargs['spin1z'], kwargs['spin2z'],
+                                            (chieff_diff, ceisabs),
+                                            (chia_diff, caisabs))
+                wfargs['spin1z'] = s1z
+                wfargs['spin2z'] = s2z
             # update all other parameters
             for p in list(modparams[mode].keys()):
                 diff, isabsdiff = modparams[mode].pop(p)
@@ -147,3 +143,69 @@ def modhm_fd(**kwargs):
         hp.resize(size)
         hcs[ii].resize(size)
     return sum(hps), sum(hcs)
+
+
+def transform_masses(m1, m2, mchirp_diff, eta_diff):
+    mchirp_diff, mcisabs = mchirp_diff
+    eta_diff, etaisabs = eta_diff
+    mchirp = conversions.mchirp_from_mass1_mass2(m1, m2)
+    eta = conversions.eta_from_mass1_mass2(m1, m2)
+    # scale
+    if mcisabs:
+        mchirp += mchirp_diff
+    else:
+        mchirp *= 1 + mchirp_diff
+    if etaisabs:
+        eta += eta_diff
+    else:
+        eta *= 1 + eta_diff
+    # make sure values are physical
+    if (eta < 0 or eta > 0.25) or mchirp < 0:
+        raise NoWaveformError("unphysical masses")
+    m1 = conversions.mass1_from_mchirp_eta(mchirp, eta)
+    m2 = conversions.mass2_from_mchirp_eta(mchirp, eta)
+    return m1, m2
+
+
+def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_diff, chia_diff):
+    """Modifies spinzs given a difference in chieff and chia.
+
+    Parameters
+    ----------
+    mass1 : float
+        Mass of the larger object (already modified).
+    mass2 : float
+        Mass of the smaller object (already modified).
+    spin1z : float
+        Z-component of spin of object 1 to modify.
+    spin2z : float
+        Z-component of spin of object 2 to modify.
+    chieff_diff : tuple of float, bool
+        Tuple giving the difference on ``chi_eff``, and a boolean indicating
+        whether the difference is an absolute difference (True), or a
+        fractional difference (False).
+
+    Returns
+    -------
+    spin1z_mod : float
+        Modified spin1z
+    spin2z_mod : float
+        Modified spin2z
+    """
+    chieff_diff, ceisabs = chieff_diff
+    chia_diff, caisabs = chia_diff
+    chi_eff = conversions.chi_eff(mass1, mass2, spin1z, spin2z)
+    chi_a = conversions.chi_a(mass1, mass2, spin1z, spin2z)
+    if ceisabs:
+        chi_eff += chieff_diff
+    else:
+        chi_eff *= 1 + chieff_diff
+    if caisabs:
+        chi_a += chia_diff
+    else:
+        chi_a *= 1 + chia_diff
+    spin1z = conversions.spin1z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
+                                                               chi_eff, chi_a)
+    spin2z = conversions.spin2z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
+                                                               chi_eff, chi_a)
+    return spin1z, spin2z
