@@ -108,7 +108,7 @@ def modhm_fd(**kwargs):
             # the parameter is already there; means multiple args were given
             raise ValueError("Provide only one of absdiff_{m}_{p}, "
                              "fdiff_{m}_{p}, or replace_{m}_{p}".format(
-                             m=''.join(mode), param))
+                             m=''.join(map(str, mode)), p=param))
         addto[param] = (val, diffarg)
     # cycle over the modes, generating the waveform one at a time
     hps = []
@@ -124,7 +124,7 @@ def modhm_fd(**kwargs):
             eta_mod = modparams[mode].pop('eta', None)
             if mchirp_mod is not None or eta_mod is not None:
                 m1, m2 = transform_masses(kwargs['mass1'], kwargs['mass2'],
-                                          mchirp_mod, eta_mod
+                                          mchirp_mod, eta_mod)
                 wfargs['mass1'] = m1
                 wfargs['mass2'] = m2
             # convert spins
@@ -228,7 +228,7 @@ def transform_masses(mass1, mass2, mchirp_mod, eta_mod):
         Modified mass2.
     """
     mchirp = conversions.mchirp_from_mass1_mass2(mass1, mass2)
-    eta = conversions.eta_from_mass1_mass2(mass1, mass2
+    eta = conversions.eta_from_mass1_mass2(mass1, mass2)
     if mchirp_mod is not None:
         diff, modtype = mchirp_mod
         mchirp = apply_mod(mchirp, diff, modtype)
