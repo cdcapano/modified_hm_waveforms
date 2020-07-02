@@ -136,10 +136,33 @@ def modhm_fd(**kwargs):
                                             chieff_mod, chia_mod)
                 wfargs['spin1z'] = s1z
                 wfargs['spin2z'] = s2z
+            spin1_perp_mod = modparams[mode].pop('spin1_perp', None)
+            spin1_az_mod = modparams[mode].pop('spin1_azimuthal', None)
+            if spin1_perp_mod is not None or spin1_az_mod is not None:
+                s1x, s1y = transform_spin_perp(kwargs['spin1x'],
+                                               kwargs['spin1y'],
+                                               spin1_perp_mod, spin1_az_mod)
+                wfargs['spin1x'] = s1x
+                wfargs['spin1y'] = s1y
+            spin2_perp_mod = modparams[mode].pop('spin2_perp', None)
+            spin2_az_mod = modparams[mode].pop('spin2_azimuthal', None)
+            if spin2_perp_mod is not None or spin2_az_mod is not None:
+                s2x, s2y = transform_spin_perp(kwargs['spin2x'],
+                                               kwargs['spin2y'],
+                                               spin2_perp_mod, spin2_az_mod)
+                wfargs['spin2x'] = s2x
+                wfargs['spin2y'] = s2y
             # update all other parameters
             for p in list(modparams[mode].keys()):
                 diff, modtype = modparams[mode].pop(p)
                 wfargs[p] = apply_mod(kwargs[p], diff, modtype)
+            # check that we still have physical spins
+            for obj in [1, 2]:
+                mag = (wfargs['spin{}x'.format(obj)]**2 +
+                       wfargs['spin{}y'.format(obj)]**2 +
+                       wfargs['spin{}z'.format(obj)]**2)**0.5
+                if mag > 1:
+                    raise NoWaveformError("unphysical spins")
         wfargs['mode_array'] = [mode]
         hp, hc = get_fd_waveform(**wfargs) 
         hps.append(hp)
@@ -261,3 +284,43 @@ def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_mod, chia_mod):
     spin2z = conversions.spin2z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
                                                                chi_eff, chi_a)
     return spin1z, spin2z
+
+
+def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
+    """Modifies x and y components of spin of an object.
+
+    Parameters
+    ----------
+    spinx : float
+        X-component of spin to modify.
+    spiny : float
+        Y-component of spin to modify.
+    spin_perp_mod : tuple of (float, str) or None
+        Tuple giving the modification value for ``spin_perp``, and a string
+        indicating whether the given modification is a fractional difference
+        (``'fdiff'``), an absolute difference (``'absdiff'``), or a replacement
+        (``'replace'``). If ``None``, ``spin_perp`` will not be modified.
+    spin_azimuthal_mod : tuple of (float, str) or None
+        Same as ``spin_perp_mod``, but for ``spin_azimuthal``.
+
+    Returns
+    -------
+    spinx : float
+        Modified spinx
+    spiny : float
+        Modified spiny
+    """
+    spin_perp = (spinx**2 + spiny**2)**0.5
+    spin_az = numpy.arctan2(spiny, spinx)
+    # map to [0, 2pi)
+    if spin_az < 0:
+        spinaz += 2*numpy.pi
+    if spin_perp_mod is not None:
+        diff, modtype = spin_perp_mod
+        spin_perp = apply_mod(spin_perp, diff, modtype)
+    if spin_azimuthal_mod is not None:
+        diff, modtype = spin_azimuthal_mod
+        spin_az = apply_mod(spin_az, diff, modtype)
+    spinx = spin_perp * numpy.cos(spin_az)
+    spiny = spin_perp * numpy.sin(spin_az)
+    return spinx, spiny
