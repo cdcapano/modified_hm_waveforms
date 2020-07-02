@@ -161,7 +161,7 @@ def modhm_fd(**kwargs):
                 mag = (wfargs['spin{}x'.format(obj)]**2 +
                        wfargs['spin{}y'.format(obj)]**2 +
                        wfargs['spin{}z'.format(obj)]**2)**0.5
-                if mag > 1:
+                if mag >= 1:
                     raise NoWaveformError("unphysical spins")
         wfargs['mode_array'] = [mode]
         hp, hc = get_fd_waveform(**wfargs) 
@@ -246,6 +246,9 @@ def transform_masses(mass1, mass2, mchirp_mod, eta_mod):
 def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_mod, chia_mod):
     """Modifies spinzs given a difference in chieff and chia.
 
+    Raises a ``NoWaveformError`` if the modified ``chi_eff``, ``chi_a``,
+    ``spin1z``, or ``spin2z`` are not in (-1, 1).
+
     Parameters
     ----------
     mass1 : float
@@ -276,18 +279,29 @@ def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_mod, chia_mod):
     if chieff_mod is not None:
         diff, modtype = chieff_mod
         chi_eff = apply_mod(chi_eff, diff, modtype)
+        if chi_eff <= -1 or chi_eff >= 1:
+            raise NoWaveformError("unphysical chi_eff")
     if chia_mod is not None:
         diff, modtype = chia_mod
         chi_a = apply_mod(chi_a, diff, modtype)
+        if chi_a <= -1 or chi_a >= 1:
+            raise NoWaveformError("unphysical chi_a")
     spin1z = conversions.spin1z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
                                                                chi_eff, chi_a)
+    if spin1z <= -1 or spin1z >= 1:
+        raise NoWaveformError("unphysical spin1z")
     spin2z = conversions.spin2z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
                                                                chi_eff, chi_a)
+    if spin2z <= -1 or spin2z >= 1:
+        raise NoWaveformError("unphysical spin2z")
     return spin1z, spin2z
 
 
 def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     """Modifies x and y components of spin of an object.
+
+    Raises a ``NoWaveformError`` if the modified spin perp magnitude is not
+    in [0, 1).
 
     Parameters
     ----------
@@ -318,6 +332,8 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     if spin_perp_mod is not None:
         diff, modtype = spin_perp_mod
         spin_perp = apply_mod(spin_perp, diff, modtype)
+        if spin_perp < 0 or spin_perp >= 1:
+            raise NoWaveformError("unphysical spin perp")
     if spin_azimuthal_mod is not None:
         diff, modtype = spin_azimuthal_mod
         spin_az = apply_mod(spin_az, diff, modtype)
