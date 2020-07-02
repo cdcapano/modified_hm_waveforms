@@ -328,7 +328,7 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     spin_az = numpy.arctan2(spiny, spinx)
     # map to [0, 2pi)
     if spin_az < 0:
-        spinaz += 2*numpy.pi
+        spin_az += 2*numpy.pi
     if spin_perp_mod is not None:
         diff, modtype = spin_perp_mod
         spin_perp = apply_mod(spin_perp, diff, modtype)
