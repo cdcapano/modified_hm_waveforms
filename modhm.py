@@ -279,20 +279,20 @@ def transform_spinzs(mass1, mass2, spin1z, spin2z, chieff_mod, chia_mod):
     if chieff_mod is not None:
         diff, modtype = chieff_mod
         chi_eff = apply_mod(chi_eff, diff, modtype)
-        if chi_eff <= -1 or chi_eff >= 1:
+        if abs(chi_eff) >= 1:
             raise NoWaveformError("unphysical chi_eff")
     if chia_mod is not None:
         diff, modtype = chia_mod
         chi_a = apply_mod(chi_a, diff, modtype)
-        if chi_a <= -1 or chi_a >= 1:
+        if abs(chi_a) >= 1:
             raise NoWaveformError("unphysical chi_a")
     spin1z = conversions.spin1z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
                                                                chi_eff, chi_a)
-    if spin1z <= -1 or spin1z >= 1:
+    if abs(spin1z)>= 1:
         raise NoWaveformError("unphysical spin1z")
     spin2z = conversions.spin2z_from_mass1_mass2_chi_eff_chi_a(mass1, mass2,
                                                                chi_eff, chi_a)
-    if spin2z <= -1 or spin2z >= 1:
+    if abs(spin2z) >= 1:
         raise NoWaveformError("unphysical spin2z")
     return spin1z, spin2z
 
