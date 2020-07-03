@@ -301,7 +301,7 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     """Modifies x and y components of spin of an object.
 
     Raises a ``NoWaveformError`` if the modified spin perp magnitude is not
-    in [0, 1).
+    in (-1, 1).
 
     Parameters
     ----------
@@ -332,7 +332,7 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     if spin_perp_mod is not None:
         diff, modtype = spin_perp_mod
         spin_perp = apply_mod(spin_perp, diff, modtype)
-        if spin_perp < 0 or spin_perp >= 1:
+        if abs(spin_perp) >= 1:
             raise NoWaveformError("unphysical spin perp")
     if spin_azimuthal_mod is not None:
         diff, modtype = spin_azimuthal_mod
