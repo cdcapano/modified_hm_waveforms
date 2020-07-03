@@ -324,8 +324,11 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     spiny : float
         Modified spiny
     """
-    spin_perp = (spinx**2 + spiny**2)**0.5
     spin_az = numpy.arctan2(spiny, spinx)
+    sinaz = numpy.sin(spin_az)
+    spin_perp = numpy.sign(sinaz)*(spinx**2 + spiny**2)**0.5
+    # constrain spin_az to upper half plane
+    spin_az = numpy.arcsin(abs(sinaz))
     # map to [0, 2pi)
     if spin_az < 0:
         spin_az += 2*numpy.pi
@@ -338,5 +341,5 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
         diff, modtype = spin_azimuthal_mod
         spin_az = apply_mod(spin_az, diff, modtype)
     spinx = spin_perp * numpy.cos(spin_az)
-    spiny = spin_perp * numpy.sin(spin_az)
+    spiny = spin_perp * abs(numpy.sin(spin_az))
     return spinx, spiny
