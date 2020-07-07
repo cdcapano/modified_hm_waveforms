@@ -301,7 +301,8 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
     """Modifies x and y components of spin of an object.
 
     Raises a ``NoWaveformError`` if the modified spin perp magnitude is not
-    in (-1, 1).
+    in (-1, 1). Also raises a ``ValueError`` if absolute spin azimuthal
+    modification is not in `[-pi/2, pi/2]`.
 
     Parameters
     ----------
@@ -325,13 +326,7 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
         Modified spiny
     """
     spin_az = numpy.arctan2(spiny, spinx)
-    sinaz = numpy.sin(spin_az)
-    spin_perp = numpy.sign(sinaz)*(spinx**2 + spiny**2)**0.5
-    # constrain spin_az to upper half plane
-    spin_az = numpy.arcsin(abs(sinaz))
-    # map to [0, 2pi)
-    if spin_az < 0:
-        spin_az += 2*numpy.pi
+    spin_perp = (spinx**2 + spiny**2)**0.5
     if spin_perp_mod is not None:
         diff, modtype = spin_perp_mod
         spin_perp = apply_mod(spin_perp, diff, modtype)
@@ -339,7 +334,16 @@ def transform_spin_perp(spinx, spiny, spin_perp_mod, spin_azimuthal_mod):
             raise NoWaveformError("unphysical spin perp")
     if spin_azimuthal_mod is not None:
         diff, modtype = spin_azimuthal_mod
+        # make sure absolute differences are +/- pi/2
+        if diff == 'absdiff' and abs(diff) > numpy.pi/2:
+            raise ValueError("absolute spin azimuthal difference must be in "
+                             "[-pi/2, pi/2]")
         spin_az = apply_mod(spin_az, diff, modtype)
+    # if spin perp is now negative, add pi to the azimuthal
+    if spin_perp < 0:
+        spin_az += numpy.pi
+        spin_perp = abs(spin_perp)
+    # convert back to x, y
     spinx = spin_perp * numpy.cos(spin_az)
-    spiny = spin_perp * abs(numpy.sin(spin_az))
+    spiny = spin_perp * numpy.sin(spin_az)
     return spinx, spiny
