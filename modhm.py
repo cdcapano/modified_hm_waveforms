@@ -56,11 +56,16 @@ def modhm_fd(**kwargs):
         The waveform approximant to use.
     mode_array : array of tuples
         The modes to generate, e.g., ``[(2, 2), (3, 3)]``.
-    mod_{mode}_{parameter} : float, optional
-        Use the given value for ``{parameter}`` for mode ``{mode}``.
     fdiff_{mode}_{parameter} : float, optional
         Adjust the parameter ``{parameter}`` for mode ``{mode}`` by the
         given fractional difference.
+    absdiff_{mode}_{parameter} : float, optional
+        Adjust the parameter ``{parameter}`` for mode ``{mode}`` by the
+        given absolute difference.
+    replace_{mode}_{parameter} : float, optional
+        Use the given value for ``{parameter}`` for mode ``{mode}``.
+    amp_{mode} : float, optional
+        Modify the amplitude of mode ``{mode}`` by the given scale factor.
     other kwargs :
         All other keyword argument are passed to
         :py:func:`pycbc.waveform.waveform.get_fd_waveform`.
@@ -164,7 +169,12 @@ def modhm_fd(**kwargs):
                 if mag >= 1:
                     raise NoWaveformError("unphysical spins")
         wfargs['mode_array'] = [mode]
+        # pull out any amplitude scaling
+        scalefac = wfargs.pop('amp_{}'.format(mode), 1.)
         hp, hc = get_fd_waveform(**wfargs) 
+        if scalefac != 1.:
+            hp *= scalefac
+            hc *= scalefac
         hps.append(hp)
         hcs.append(hc)
         size = max(size, len(hp))
