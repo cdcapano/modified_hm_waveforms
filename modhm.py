@@ -170,7 +170,7 @@ def modhm_fd(**kwargs):
                     raise NoWaveformError("unphysical spins")
         wfargs['mode_array'] = [mode]
         # pull out any amplitude scaling
-        scalefac = wfargs.pop('amp_{}'.format(mode), 1.)
+        scalefac = wfargs.pop('amp_{}'.format(''.join(map(str, mode))), 1.)
         hp, hc = get_fd_waveform(**wfargs) 
         if scalefac != 1.:
             hp *= scalefac
